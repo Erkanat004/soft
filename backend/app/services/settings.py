@@ -12,9 +12,9 @@ class SettingsService:
         elevenlabs_key = os.getenv("ELEVENLABS_API_KEY", "")
 
         has_keys = bool(openai_key.strip() or replicate_key.strip() or elevenlabs_key.strip())
-        current_provider = os.getenv("IMAGE_PROVIDER", "mock")
+        current_provider = os.getenv("IMAGE_PROVIDER", "pollinations")
 
-        if has_keys and current_provider == "mock":
+        if has_keys:
             if openai_key.strip():
                 current_provider = "openai"
                 os.environ["IMAGE_PROVIDER"] = "openai"
@@ -22,7 +22,15 @@ class SettingsService:
                 current_provider = "replicate"
                 os.environ["IMAGE_PROVIDER"] = "replicate"
 
-        is_mock_disabled = has_keys and current_provider != "mock"
+        if has_keys:
+            status_label = "🟢 Платные ИИ активны (OpenAI / Replicate)"
+            is_active = True
+        elif current_provider == "mock":
+            status_label = "🟡 Офлайн МОК-режим (Локальный холст)"
+            is_active = False
+        else:
+            status_label = "🟢 Бесплатный онлайн ИИ активен (Pollinations.ai - без ключей)"
+            is_active = True
 
         return {
             "openai_api_key_set": bool(openai_key.strip()),
@@ -31,8 +39,8 @@ class SettingsService:
             "openai_api_key_masked": f"{openai_key[:6]}...{openai_key[-4:]}" if len(openai_key) > 10 else "",
             "replicate_api_key_masked": f"{replicate_key[:4]}...{replicate_key[-4:]}" if len(replicate_key) > 8 else "",
             "image_provider": current_provider,
-            "mock_disabled": is_mock_disabled,
-            "status_label": "🟢 ИИ-генераторы активны (МОК отключен)" if is_mock_disabled else "🟡 МОК-режим (Офлайн холст)"
+            "mock_disabled": is_active,
+            "status_label": status_label
         }
 
     @classmethod
@@ -51,13 +59,15 @@ class SettingsService:
         if elevenlabs_key is not None and elevenlabs_key.strip():
             os.environ["ELEVENLABS_API_KEY"] = elevenlabs_key.strip()
 
-        # Автоматическое переключение провайдера при наличии ключей (отключение МОК)
+        # Автоматическое переключение провайдера при наличии ключей
         if image_provider and image_provider.strip():
             os.environ["IMAGE_PROVIDER"] = image_provider.strip()
         elif os.getenv("OPENAI_API_KEY"):
             os.environ["IMAGE_PROVIDER"] = "openai"
         elif os.getenv("REPLICATE_API_KEY"):
             os.environ["IMAGE_PROVIDER"] = "replicate"
+        else:
+            os.environ["IMAGE_PROVIDER"] = "pollinations"
 
         env_dict = {}
         if os.path.exists(ENV_PATH):
@@ -71,7 +81,7 @@ class SettingsService:
         if os.getenv("OPENAI_API_KEY"): env_dict["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
         if os.getenv("REPLICATE_API_KEY"): env_dict["REPLICATE_API_KEY"] = os.getenv("REPLICATE_API_KEY")
         if os.getenv("ELEVENLABS_API_KEY"): env_dict["ELEVENLABS_API_KEY"] = os.getenv("ELEVENLABS_API_KEY")
-        env_dict["IMAGE_PROVIDER"] = os.getenv("IMAGE_PROVIDER", "mock")
+        env_dict["IMAGE_PROVIDER"] = os.getenv("IMAGE_PROVIDER", "pollinations")
 
         with open(ENV_PATH, "w", encoding="utf-8") as f:
             f.write("# Настройки приложения и API Ключи\n")

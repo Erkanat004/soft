@@ -11,6 +11,11 @@ client = TestClient(app)
 def test_image_module():
     print("=== ТЕСТ 1: Первичная генерация картинки ===")
     prompt = "Огромная космическая станция на фоне гигантской туманности"
+    file_hash = ImageGenerationService.get_image_hash(prompt)
+    cache_path = os.path.join(os.getcwd(), "cache", "images", f"{file_hash}.png")
+    if os.path.exists(cache_path):
+        os.remove(cache_path)
+
     res1 = ImageGenerationService.generate_image(prompt)
     print("Результат:", res1)
     
