@@ -1,0 +1,31 @@
+# Virtual Environments
+backend/venv/
+venv/
+env/
+ENV/
+
+# Node Modules & Distribution
+frontend/node_modules/
+node_modules/
+dist/
+
+# Python Cache & Bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Application Caches & Render Outputs
+backend/cache/
+backend/output/
+backend/logs/
+cache/
+output/
+logs/
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
