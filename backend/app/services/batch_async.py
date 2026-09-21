@@ -11,7 +11,8 @@ class BatchAsyncService:
         cls, 
         items: List[Dict[str, Any]], 
         voice: str = "ru-RU-DmitryNeural", 
-        max_concurrency: int = 4
+        max_concurrency: int = 4,
+        force: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Параллельная генерация TTS для списка кадров с помощью asyncio.Semaphore.
@@ -26,7 +27,7 @@ class BatchAsyncService:
                 if not text or not text.strip():
                     return {"frame_id": frame_id, "error": "Пустой текст"}
                 try:
-                    res = await TTSService.generate_speech(text=text, voice=voice)
+                    res = await TTSService.generate_speech(text=text, voice=voice, force=force)
                     return {
                         "frame_id": frame_id,
                         "audio_url": f"/api/audio/{res['filename']}",

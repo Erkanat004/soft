@@ -30,6 +30,7 @@ class TTSGenerateRequest(BaseModel):
     text: str
     voice: Optional[str] = "ru-RU-DmitryNeural"
     frame_id: Optional[str] = None
+    force: Optional[bool] = False
 
 class TTSGenerateResponse(BaseModel):
     frame_id: Optional[str] = None
@@ -123,7 +124,8 @@ async def generate_tts_audio(request: TTSGenerateRequest):
     try:
         res = await TTSService.generate_speech(
             text=request.text, 
-            voice=request.voice or TTSService.DEFAULT_VOICE
+            voice=request.voice or TTSService.DEFAULT_VOICE,
+            force=bool(request.force)
         )
         return TTSGenerateResponse(
             frame_id=request.frame_id,
@@ -298,6 +300,7 @@ class BatchTTSRequest(BaseModel):
     items: List[BatchTTSItem]
     voice: Optional[str] = "ru-RU-DmitryNeural"
     max_concurrency: Optional[int] = 4
+    force: Optional[bool] = False
 
 class BatchPromptItem(BaseModel):
     frame_id: str
@@ -319,7 +322,8 @@ async def batch_generate_tts(request: BatchTTSRequest):
     return await BatchAsyncService.generate_tts_batch(
         items=items, 
         voice=request.voice or "ru-RU-DmitryNeural", 
-        max_concurrency=request.max_concurrency or 4
+        max_concurrency=request.max_concurrency or 4,
+        force=bool(request.force)
     )
 
 @router.post("/batch/images")

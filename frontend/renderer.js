@@ -621,12 +621,12 @@ async function syncTimeline() {
   }
 }
 
-// 9. Генерация TTS для одного кадра
-async function generateFrameTTS(frameId, text, btnElement, cardElement) {
+// 9. Генерация / Переозвучивание TTS для одного кадра
+async function generateFrameTTS(frameId, text, btnElement, cardElement, force = false) {
   if (!text.trim()) return;
 
   btnElement.disabled = true;
-  logDiagnostic('info', `Озвучивание кадра ${frameId}...`);
+  logDiagnostic('info', `${force ? 'Переозвучивание' : 'Озвучивание'} кадра ${frameId}...`);
 
   const voiceSelect = getEl('voiceSelect');
   const selectedVoice = voiceSelect ? voiceSelect.value : 'ru-RU-DmitryNeural';
@@ -635,7 +635,7 @@ async function generateFrameTTS(frameId, text, btnElement, cardElement) {
     const res = await fetch(`${API_BASE}/tts/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frame_id: frameId, text, voice: selectedVoice })
+      body: JSON.stringify({ frame_id: frameId, text, voice: selectedVoice, force: force })
     });
 
     if (!res.ok) throw new Error(`Ошибка TTS: ${res.status}`);
@@ -648,19 +648,86 @@ async function generateFrameTTS(frameId, text, btnElement, cardElement) {
       cardElement.appendChild(audioContainer);
     }
 
-    const fullAudioUrl = `http://127.0.0.1:8000${data.audio_url}`;
+    const fullAudioUrl = `http://127.0.0.1:8000${data.audio_url}?t=${Date.now()}`;
     audioContainer.innerHTML = `
       <span style="font-size: 12px; color: #4ade80;">🔊 Озвучено (${data.duration}s):</span>
       <audio controls src="${fullAudioUrl}"></audio>
     `;
 
-    logDiagnostic('success', `Кадр ${frameId} озвучен (${data.duration}s) ${data.cached ? '⚡(из кэша)' : ''}`);
+    btnElement.textContent = '🔄 Переозвучить';
+    logDiagnostic('success', `Кадр ${frameId} успешно ${force ? 'переозвучен' : 'озвучен'} (${data.duration}s) ${data.cached ? '⚡(из кэша)' : ''}`);
     await syncTimeline();
 
   } catch (err) {
     logDiagnostic('error', `Ошибка TTS кадра ${frameId}: ${err.message}`);
   } finally {
     btnElement.disabled = false;
+  }
+}
+
+// 9.1 Функция переозвучивания целой сцены
+async function revoiceScene(scene, sceneCardElement, btnElement) {
+  const frameCards = sceneCardElement.querySelectorAll('.frame-card');
+  if (frameCards.length === 0) return;
+
+  btnElement.disabled = true;
+  const originalText = btnElement.innerHTML;
+  btnElement.textContent = '🎙️ Переозвучивание...';
+  updateProgress(20, `Переозвучка сцены "${scene.title}"...`);
+  logDiagnostic('info', `Запуск принудительной переозвучки для всех кадров сцены "${scene.title}" (${frameCards.length} кадров)...`);
+
+  const items = [];
+  frameCards.forEach(card => {
+    const frameId = card.getAttribute('data-frame-id');
+    const narrationInput = card.querySelector('.narration-input');
+    const narrationText = narrationInput ? narrationInput.value : '';
+    if (narrationText.trim()) {
+      items.push({ frame_id: frameId, text: narrationText.trim() });
+    }
+  });
+
+  const voiceSelect = getEl('voiceSelect');
+  const selectedVoice = voiceSelect ? voiceSelect.value : 'ru-RU-DmitryNeural';
+
+  try {
+    const res = await fetch(`${API_BASE}/batch/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, voice: selectedVoice, max_concurrency: 4, force: true })
+    });
+
+    if (!res.ok) throw new Error(`Ошибка пакетной озвучки: ${res.status}`);
+    const results = await res.json();
+
+    results.forEach(resItem => {
+      if (resItem.error) return;
+      const card = sceneCardElement.querySelector(`.frame-card[data-frame-id="${resItem.frame_id}"]`);
+      if (card) {
+        let audioContainer = card.querySelector('.audio-preview');
+        if (!audioContainer) {
+          audioContainer = document.createElement('div');
+          audioContainer.className = 'audio-preview';
+          card.appendChild(audioContainer);
+        }
+        audioContainer.innerHTML = `
+          <span style="font-size: 12px; color: #4ade80;">🔊 Озвучено (${resItem.duration}s):</span>
+          <audio controls src="http://127.0.0.1:8000${resItem.audio_url}?t=${Date.now()}"></audio>
+        `;
+        const ttsBtn = card.querySelector('.tts-single-btn');
+        if (ttsBtn) ttsBtn.textContent = '🔄 Переозвучить';
+      }
+    });
+
+    await syncTimeline();
+    updateProgress(100, `Сцена "${scene.title}" переозвучена!`);
+    logDiagnostic('success', `Сцена "${scene.title}" (${results.length} кадров) успешно переозвучена!`);
+
+  } catch (err) {
+    logDiagnostic('error', `Ошибка переозвучки сцены: ${err.message}`);
+    updateProgress(0, 'Ошибка');
+  } finally {
+    btnElement.disabled = false;
+    btnElement.innerHTML = originalText;
   }
 }
 
@@ -831,7 +898,8 @@ function renderScript(scriptData) {
       const visualInput = frameCard.querySelector('.visual-input');
 
       ttsSingleBtn.addEventListener('click', () => {
-        generateFrameTTS(frame.frame_id, narrationInput.value, ttsSingleBtn, frameCard);
+        const hasAudio = Boolean(frameCard.querySelector('.audio-preview'));
+        generateFrameTTS(frame.frame_id, narrationInput.value, ttsSingleBtn, frameCard, hasAudio);
       });
 
       imgSingleBtn.addEventListener('click', () => {
@@ -845,13 +913,24 @@ function renderScript(scriptData) {
       framesContainer.appendChild(frameCard);
     });
 
-    sceneCard.innerHTML = `
-      <div class="scene-header">
-        <span>🎬 ${escapeHtml(scene.title)}</span>
+    const sceneHeader = document.createElement('div');
+    sceneHeader.className = 'scene-header';
+    sceneHeader.innerHTML = `
+      <span>🎬 ${escapeHtml(scene.title)}</span>
+      <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 13px; font-weight: normal; color: #94a3b8;">${scene.frames.length} кадра(ов)</span>
+        <button class="btn-accent revoice-scene-btn" style="font-size: 12px; padding: 4px 10px; background-color: #0284c7; color: white;">🎙️ Переозвучить сцену</button>
       </div>
     `;
 
+    const revoiceBtn = sceneHeader.querySelector('.revoice-scene-btn');
+    if (revoiceBtn) {
+      revoiceBtn.addEventListener('click', () => {
+        revoiceScene(scene, sceneCard, revoiceBtn);
+      });
+    }
+
+    sceneCard.appendChild(sceneHeader);
     sceneCard.appendChild(framesContainer);
     scenesContainer.appendChild(sceneCard);
   });
