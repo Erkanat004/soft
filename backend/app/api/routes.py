@@ -18,6 +18,7 @@ from app.services.batch_async import BatchAsyncService
 from app.services.voice_library import VoiceLibraryService
 from app.services.fcpxml import FCPXMLExportService, CACHE_DIR as FCPXML_CACHE_DIR
 from app.services.logger import AppLogger
+from app.services.settings import SettingsService
 
 router = APIRouter(prefix="/api", tags=["API Endpoints"])
 
@@ -380,6 +381,27 @@ def get_system_diagnostics():
         "video_cache_count": len(os.listdir(VIDEO_CACHE_DIR)) if os.path.exists(VIDEO_CACHE_DIR) else 0,
         "render_count": len(os.listdir(RENDER_OUTPUT_DIR)) if os.path.exists(RENDER_OUTPUT_DIR) else 0
     }
+
+class SaveSettingsRequest(BaseModel):
+    openai_api_key: Optional[str] = None
+    replicate_api_key: Optional[str] = None
+    elevenlabs_api_key: Optional[str] = None
+    image_provider: Optional[str] = None
+
+@router.get("/system/settings")
+def get_system_settings():
+    """ Получение текущего состояния ключей и статуса МОК-режима """
+    return SettingsService.get_settings()
+
+@router.post("/system/settings")
+def save_system_settings(request: SaveSettingsRequest):
+    """ Сохранение ключей, обновление переменных окружения и автоматическое отключение МОК-режима """
+    return SettingsService.save_settings(
+        openai_key=request.openai_api_key,
+        replicate_key=request.replicate_api_key,
+        elevenlabs_key=request.elevenlabs_api_key,
+        image_provider=request.image_provider
+    )
 
 @router.get("/system/file-logs")
 def get_system_file_logs(limit: Optional[int] = 100):

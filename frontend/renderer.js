@@ -129,8 +129,54 @@ function setupEventListeners() {
   if (closeHelpBtn && helpModal) {
     closeHelpBtn.addEventListener('click', () => helpModal.style.display = 'none');
   }
-  if (okHelpBtn && helpModal) {
-    okHelpBtn.addEventListener('click', () => helpModal.style.display = 'none');
+  // Обработчики модального окна настроек ключей
+  const settingsBtn = getEl('settingsBtn');
+  const closeSettingsBtn = getEl('closeSettingsBtn');
+  const saveSettingsBtn = getEl('saveSettingsBtn');
+  const settingsModal = getEl('settingsModal');
+
+  if (settingsBtn && settingsModal) {
+    settingsBtn.addEventListener('click', async () => {
+      settingsModal.style.display = 'flex';
+      await loadSystemSettings();
+    });
+  }
+  if (closeSettingsBtn && settingsModal) {
+    closeSettingsBtn.addEventListener('click', () => settingsModal.style.display = 'none');
+  }
+  if (saveSettingsBtn) {
+    saveSettingsBtn.addEventListener('click', async () => {
+      const openaiKey = getEl('openaiKeyInput') ? getEl('openaiKeyInput').value : '';
+      const replicateKey = getEl('replicateKeyInput') ? getEl('replicateKeyInput').value : '';
+      const elevenlabsKey = getEl('elevenlabsKeyInput') ? getEl('elevenlabsKeyInput').value : '';
+
+      try {
+        saveSettingsBtn.disabled = true;
+        const res = await fetch(`${API_BASE}/system/settings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            openai_api_key: openaiKey,
+            replicate_api_key: replicateKey,
+            elevenlabs_api_key: elevenlabsKey
+          })
+        });
+
+        if (!res.ok) throw new Error(`Ошибка сохранения: ${res.status}`);
+        const data = await res.json();
+
+        updateSettingsStatusBadge(data);
+        logDiagnostic('success', `API Ключи сохранены! Провайдер: ${data.image_provider.toUpperCase()} | ${data.status_label}`);
+        alert(`Настройки успешно сохранены!\nСтатус: ${data.status_label}`);
+        settingsModal.style.display = 'none';
+
+      } catch (err) {
+        logDiagnostic('error', `Ошибка сохранения ключей: ${err.message}`);
+        alert(`Ошибка сохранения: ${err.message}`);
+      } finally {
+        saveSettingsBtn.disabled = false;
+      }
+    });
   }
 
   // Drag & Drop файла
@@ -849,6 +895,44 @@ async function loadAvailableVoices() {
     }
   } catch (err) {
     logDiagnostic('warning', `Не удалось загрузить дикторов: ${err.message}`);
+  }
+}
+
+// Настройки API Ключей и статуса МОК-режима
+async function loadSystemSettings() {
+  try {
+    const res = await fetch(`${API_BASE}/system/settings`);
+    if (res.ok) {
+      const data = await res.json();
+      updateSettingsStatusBadge(data);
+
+      const openaiInput = getEl('openaiKeyInput');
+      const replicateInput = getEl('replicateKeyInput');
+      if (openaiInput && data.openai_api_key_masked) {
+        openaiInput.placeholder = `Ключ загружен (${data.openai_api_key_masked})`;
+      }
+      if (replicateInput && data.replicate_api_key_masked) {
+        replicateInput.placeholder = `Ключ загружен (${data.replicate_api_key_masked})`;
+      }
+    }
+  } catch (err) {
+    logDiagnostic('warning', `Не удалось загрузить статус настроек: ${err.message}`);
+  }
+}
+
+function updateSettingsStatusBadge(data) {
+  const badge = getEl('settingsStatusBadge');
+  if (badge) {
+    badge.textContent = data.status_label;
+    if (data.mock_disabled) {
+      badge.style.backgroundColor = 'rgba(34, 197, 94, 0.15)';
+      badge.style.color = '#4ade80';
+      badge.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+    } else {
+      badge.style.backgroundColor = 'rgba(251, 191, 36, 0.15)';
+      badge.style.color = '#fbbf24';
+      badge.style.borderColor = 'rgba(251, 191, 36, 0.3)';
+    }
   }
 }
 
