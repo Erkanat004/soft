@@ -815,18 +815,18 @@ async function revoiceScene(scene, sceneCardElement, btnElement) {
   }
 }
 
-// 10. Генерация Изображения для одного кадра
-async function generateFrameImage(frameId, prompt, btnElement, cardElement) {
+// 10. Генерация Изображения для одного кадра строго по промпту
+async function generateFrameImage(frameId, prompt, btnElement, cardElement, force = false) {
   if (!prompt.trim()) return;
 
   btnElement.disabled = true;
-  logDiagnostic('info', `Генерация картинки для кадра ${frameId}...`);
+  logDiagnostic('info', `Генерация картинки по промпту для кадра ${frameId}...`);
 
   try {
     const res = await fetch(`${API_BASE}/image/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ frame_id: frameId, prompt })
+      body: JSON.stringify({ frame_id: frameId, prompt, force: force })
     });
 
     if (!res.ok) throw new Error(`Ошибка картинки: ${res.status}`);
@@ -835,10 +835,10 @@ async function generateFrameImage(frameId, prompt, btnElement, cardElement) {
     const mediaContainer = cardElement.querySelector('.media-preview-container');
     if (mediaContainer) {
       const fullImgUrl = `http://127.0.0.1:8000${data.image_url}?t=${Date.now()}`;
-      mediaContainer.innerHTML = `<img src="${fullImgUrl}" alt="Превью" title="${data.cached ? 'Из кэша' : 'Сгенерировано'}">`;
+      mediaContainer.innerHTML = `<img src="${fullImgUrl}" alt="Превью ИИ" title="${data.cached ? 'Из кэша' : 'Сгенерировано по промпту'}">`;
     }
 
-    logDiagnostic('success', `Картинка для кадра ${frameId} создана ${data.cached ? '⚡(из кэша)' : ''}`);
+    logDiagnostic('success', `Картинка для кадра ${frameId} создана по промпту! ${data.cached ? '⚡(из кэша)' : ''}`);
 
   } catch (err) {
     logDiagnostic('error', `Ошибка генерации картинки кадра ${frameId}: ${err.message}`);
@@ -987,7 +987,9 @@ function renderScript(scriptData) {
       });
 
       imgSingleBtn.addEventListener('click', () => {
-        generateFrameImage(frame.frame_id, visualInput.value, imgSingleBtn, frameCard);
+        const currentPrompt = visualInput.value;
+        const hasImg = Boolean(frameCard.querySelector('.media-preview-container img'));
+        generateFrameImage(frame.frame_id, currentPrompt, imgSingleBtn, frameCard, hasImg);
       });
 
       videoSingleBtn.addEventListener('click', () => {

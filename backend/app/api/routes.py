@@ -46,6 +46,7 @@ class ImageGenerateRequest(BaseModel):
     frame_id: Optional[str] = None
     width: Optional[int] = 1280
     height: Optional[int] = 720
+    force: Optional[bool] = False
 
 class ImageGenerateResponse(BaseModel):
     frame_id: Optional[str] = None
@@ -158,12 +159,14 @@ def generate_image(request: ImageGenerateRequest):
             primary_fn=lambda: ImageGenerationService.generate_image(
                 prompt=request.prompt,
                 width=request.width or 1280,
-                height=request.height or 720
+                height=request.height or 720,
+                force=bool(request.force)
             ),
             fallback_fn=lambda: ImageGenerationService.generate_image(
                 prompt=request.prompt,
                 width=request.width or 1280,
-                height=request.height or 720
+                height=request.height or 720,
+                force=bool(request.force)
             ),
             provider_name="Primary Image Generator API"
         )
