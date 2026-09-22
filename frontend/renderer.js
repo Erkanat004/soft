@@ -548,6 +548,8 @@ function setupEventListeners() {
         const data = await res.json();
 
         const downloadUrl = `http://127.0.0.1:8000${data.capcut_url}`;
+        const fcpxmlUrl = `http://127.0.0.1:8000${data.fcpxml_url}`;
+
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = data.filename;
@@ -556,8 +558,8 @@ function setupEventListeners() {
         document.body.removeChild(a);
 
         updateProgress(100, 'CapCut проект экспортирован!');
-        logDiagnostic('success', `Проект CapCut успешно сформирован! Файл: ${data.filename}`);
-        alert(`Проект CapCut успешно скомпилирован!\n\nСкачан файл: ${data.filename}\n\nКак использовать в CapCut:\n1. Распакуйте папку из ZIP в драфты CapCut:\n%LOCALAPPDATA%\\CapCut\\User Data\\Projects\\com.lveditor.draft\\\n2. Или импортируйте через Меню CapCut -> Файл -> Импорт FCPXML`);
+        logDiagnostic('success', `Проект CapCut успешно сформирован! ZIP: ${data.filename} | FCPXML: ${fcpxmlUrl}`);
+        alert(`Проект CapCut успешно скомпилирован!\n\nФайлы с исправленными путями (без неприемлемых адресов):\n- ZIP Драфт: ${data.filename}\n- FCPXML: ${fcpxmlUrl}\n\nКак открыть в CapCut:\n1. В CapCut Desktop нажать: Файл -> Импорт -> Final Cut Pro XML (FCPXML).\n2. Или поместите разархивированную папку в черновики CapCut:\n%LOCALAPPDATA%\\CapCut\\User Data\\Projects\\com.lveditor.draft\\`);
 
       } catch (err) {
         logDiagnostic('error', `Ошибка экспорта в CapCut: ${err.message}`);

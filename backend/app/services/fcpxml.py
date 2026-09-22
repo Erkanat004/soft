@@ -1,5 +1,6 @@
 import os
 import hashlib
+import urllib.parse
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from typing import Dict, Any
@@ -9,10 +10,17 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 class FCPXMLExportService:
     @classmethod
+    def clean_file_uri(cls, filepath: str) -> str:
+        """ Формирует валидный URI формата file:///C:/path со сбеганием кириллицы и спецсимволов """
+        abs_p = os.path.abspath(filepath).replace("\\", "/")
+        encoded_p = urllib.parse.quote(abs_p, safe="/:")
+        return f"file:///{encoded_p}"
+
+    @classmethod
     def generate_fcpxml(cls, timeline_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Формирует профессиональный документ FCPXML (v1.8) для импорта 
-        в DaVinci Resolve, Adobe Premiere Pro или Final Cut Pro X.
+        в CapCut, DaVinci Resolve, Adobe Premiere Pro или Final Cut Pro X.
         """
         title = timeline_data.get("title", "YouTube_Project")
         total_duration = timeline_data.get("total_duration", 0.0)
@@ -45,31 +53,31 @@ class FCPXMLExportService:
             audio_p = tf.get("audio_path")
             media_p = tf.get("media_path")
             
-            if audio_p and audio_p not in asset_map:
+            if audio_p and audio_p not in asset_map and os.path.exists(audio_p):
                 aid = f"a{asset_counter}"
                 asset_counter += 1
                 asset_map[audio_p] = aid
-                abs_audio = os.path.abspath(audio_p).replace("\\", "/")
+                src_uri = cls.clean_file_uri(audio_p)
                 ET.SubElement(
                     resources, "asset",
                     id=aid,
                     name=os.path.basename(audio_p),
-                    src=f"file:///{abs_audio}",
+                    src=src_uri,
                     duration=f"{tf.get('duration', 3.0):.2f}s",
                     hasAudio="1"
                 )
 
-            if media_p and media_p not in asset_map:
+            if media_p and media_p not in asset_map and os.path.exists(media_p):
                 aid = f"a{asset_counter}"
                 asset_counter += 1
                 asset_map[media_p] = aid
-                abs_media = os.path.abspath(media_p).replace("\\", "/")
+                src_uri = cls.clean_file_uri(media_p)
                 is_video = "1" if tf.get("media_type") == "video" else "0"
                 ET.SubElement(
                     resources, "asset",
                     id=aid,
                     name=os.path.basename(media_p),
-                    src=f"file:///{abs_media}",
+                    src=src_uri,
                     duration=f"{tf.get('duration', 3.0):.2f}s",
                     hasVideo="1",
                     hasAudio=is_video
@@ -108,7 +116,6 @@ class FCPXMLExportService:
                     start="0s"
                 )
             else:
-                # Стандартный заглушечный клип
                 asset_clip = ET.SubElement(
                     spine, "gap",
                     name=f"Gap_{frame_id}",
