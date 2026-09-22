@@ -46,7 +46,7 @@ class ScriptParser:
 
         for scene_idx, (scene_title, block_text) in enumerate(scene_blocks, start=1):
             scene_id = f"scene_{scene_idx}"
-            frames = cls._parse_frames_from_block(scene_idx, block_text)
+            frames = cls._parse_frames_from_block(scene_idx, block_text, scene_title=scene_title)
             
             if frames:
                 scenes.append(Scene(
@@ -101,8 +101,8 @@ class ScriptParser:
         return blocks
 
     @classmethod
-    def _parse_frames_from_block(cls, scene_num: int, block_text: str) -> List[Frame]:
-        """ Разбор блока сцены на отдельные кадры """
+    def _parse_frames_from_block(cls, scene_num: int, block_text: str, scene_title: str = "") -> List[Frame]:
+        """ Разбор блока сцены на отдельные кадры с учетом контекста сцены """
         frames: List[Frame] = []
         
         # Проверяем наличие меток "Кадр" или "Промпт/Озвучка"
@@ -122,15 +122,17 @@ class ScriptParser:
             visual_prompt = cls._extract_field(chunk, [r'визуал', r'промпт', r'prompt', r'visual', r'картинка'])
             narration_text = cls._extract_field(chunk, [r'озвучка', r'текст', r'audio', r'narration', r'диктор'])
 
-            # Если явных полей нет, используем весь кусок как озвучку, а промпт формируем автоматически
             if not narration_text and not visual_prompt:
                 lines = [l.strip() for l in chunk.split("\n") if l.strip()]
                 narration_text = " ".join(lines)
-                visual_prompt = f"High quality cinematic shot illustrating: {narration_text[:100]}"
-            elif not visual_prompt:
-                visual_prompt = f"Cinematic scene representing: {narration_text[:100]}"
-            elif not narration_text:
+            elif not narration_text and visual_prompt:
                 narration_text = visual_prompt
+
+            visual_prompt = cls._build_contextual_visual_prompt(
+                scene_title=scene_title,
+                narration_text=narration_text,
+                raw_prompt=visual_prompt
+            )
 
             if narration_text.strip():
                 frame_id = f"scene_{scene_num}_frame_{frame_idx}"
@@ -144,6 +146,25 @@ class ScriptParser:
                 frame_idx += 1
 
         return frames
+
+    @classmethod
+    def _build_contextual_visual_prompt(cls, scene_title: str, narration_text: str, raw_prompt: str = "") -> str:
+        """ Сбор контекстуального ИИ-промпта, подстраивающегося под тему сцены """
+        if raw_prompt and raw_prompt.strip():
+            clean_p = raw_prompt.strip()
+            for prefix in ["Визуал:", "Визуальный ряд:", "Кадр:", "Visual:", "Prompt:"]:
+                if clean_p.lower().startswith(prefix.lower()):
+                    clean_p = clean_p[len(prefix):].strip()
+            if len(clean_p) > 5 and not clean_p.lower().startswith("cinematic scene"):
+                return clean_p
+
+        clean_title = re.sub(r'^(?:\[?\s*(?:Сцена|Scene)\s*\d+[\:\.\s]*\]?)', '', scene_title, flags=re.IGNORECASE).strip()
+        narr_excerpt = narration_text.strip()[:140] if narration_text else ""
+
+        if clean_title and clean_title.lower() not in ["сцена", "scene"]:
+            return f"Cinematic scene matching context '{clean_title}': {narr_excerpt}, photorealistic 8k, detailed"
+        else:
+            return f"Cinematic scene representing: {narr_excerpt}, photorealistic 8k, detailed"
 
     @staticmethod
     def _extract_field(text: str, keywords: List[str]) -> str:

@@ -32,6 +32,48 @@ class ImageGenerationService:
         return p
 
     @classmethod
+    def enrich_prompt_for_ai(cls, prompt: str) -> str:
+        """ Обогащение и контекстуальная адаптация промпта для ИИ-моделей генерации изображений """
+        clean_p = cls.clean_prompt(prompt)
+        if not clean_p:
+            return "cinematic high quality photo, 8k resolution, photorealistic"
+
+        translations = {
+            "корабль": "sailing ship vessel",
+            "парусник": "sailing vessel ocean",
+            "космос": "outer space cosmos galaxy",
+            "галактика": "glowing galaxy nebulae space",
+            "город": "futuristic city skyline cityscape",
+            "неон": "glowing neon lights night city",
+            "робот": "advanced humanoid robot cybernetic",
+            "гора": "majestic snow-capped mountain landscape",
+            "горы": "majestic snow-capped mountains landscape",
+            "лес": "lush green enchanted forest trees",
+            "парк": "scenic autumn park golden trees",
+            "закат": "dramatic golden hour ocean sunset",
+            "океан": "vast blue ocean sea waves",
+            "море": "vast deep blue sea",
+            "машина": "sleek modern sports car automobile",
+            "спорткар": "sleek red futuristic sports car",
+            "человек": "cinematic portrait of a person",
+            "зима": "snowy winter landscape frost",
+            "осень": "golden autumn landscape falling leaves",
+        }
+
+        found_tags = []
+        lower_p = clean_p.lower()
+        for ru_word, en_tag in translations.items():
+            if ru_word in lower_p:
+                found_tags.append(en_tag)
+
+        tags_str = f", {', '.join(found_tags)}" if found_tags else ""
+        
+        if clean_p.lower().startswith("cinematic") or clean_p.lower().startswith("high quality"):
+            return f"{clean_p}{tags_str}, 8k resolution, photorealistic, cinematic lighting, masterpiece"
+        
+        return f"Cinematic photorealistic shot: {clean_p}{tags_str}, 8k resolution, highly detailed, dramatic lighting, masterpiece"
+
+    @classmethod
     def get_image_hash(cls, prompt: str, width: int = 1280, height: int = 720) -> str:
         """ MD5 хэш для сочетания очищенного промпта и разрешения """
         clean_p = cls.clean_prompt(prompt)
@@ -42,6 +84,7 @@ class ImageGenerationService:
     def generate_image_with_retry(cls, prompt: str, filepath: str, width: int = 1280, height: int = 720, force: bool = False):
         """ Вызов ИИ-генератора с созданием изображения строго по промпту """
         clean_p = cls.clean_prompt(prompt)
+        ai_prompt = cls.enrich_prompt_for_ai(clean_p)
         provider = os.getenv("IMAGE_PROVIDER", "pollinations").lower()
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         replicate_key = os.getenv("REPLICATE_API_KEY", "").strip()
@@ -49,7 +92,7 @@ class ImageGenerationService:
         # 1. Попытка OpenAI DALL-E 3
         if provider == "openai" and openai_key:
             try:
-                cls._generate_openai_image(clean_p, filepath, width, height, openai_key)
+                cls._generate_openai_image(ai_prompt, filepath, width, height, openai_key)
                 return
             except Exception as e:
                 print(f"[ImageGen Warning] Ошибка OpenAI API ({e}), переключение на бесплатный ИИ")
@@ -57,14 +100,14 @@ class ImageGenerationService:
         # 2. Попытка Replicate (Flux/SDXL)
         if provider == "replicate" and replicate_key:
             try:
-                cls._generate_replicate_image(clean_p, filepath, width, height, replicate_key)
+                cls._generate_replicate_image(ai_prompt, filepath, width, height, replicate_key)
                 return
             except Exception as e:
                 print(f"[ImageGen Warning] Ошибка Replicate API ({e}), переключение на бесплатный ИИ")
 
         # 3. Бесплатная онлайн-генерация ИИ картинки строго по промпту (Pollinations.ai / Picsum)
         try:
-            cls._generate_free_online_image(clean_p, filepath, width, height)
+            cls._generate_free_online_image(ai_prompt, filepath, width, height)
             return
         except Exception as e:
             print(f"[ImageGen Warning] Ошибка всех онлайн-сервисов ({e}), переход на локальный МОК-холст")
