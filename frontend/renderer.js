@@ -179,6 +179,47 @@ function setupEventListeners() {
     });
   }
 
+  // Обработчики модального окна раздельной очистки кэша
+  const cacheBtn = getEl('cacheBtn');
+  const closeCacheBtn = getEl('closeCacheBtn');
+  const cacheModal = getEl('cacheModal');
+
+  if (cacheBtn && cacheModal) {
+    cacheBtn.addEventListener('click', async () => {
+      cacheModal.style.display = 'flex';
+      await loadCacheStats();
+    });
+  }
+  if (closeCacheBtn && cacheModal) {
+    closeCacheBtn.addEventListener('click', () => cacheModal.style.display = 'none');
+  }
+
+  const clearAudioCacheBtn = getEl('clearAudioCacheBtn');
+  const clearImageCacheBtn = getEl('clearImageCacheBtn');
+  const clearVideoCacheBtn = getEl('clearVideoCacheBtn');
+  const clearRenderCacheBtn = getEl('clearRenderCacheBtn');
+  const clearAllCacheBtn = getEl('clearAllCacheBtn');
+
+  if (clearAudioCacheBtn) {
+    clearAudioCacheBtn.addEventListener('click', () => performCacheClear('audio', clearAudioCacheBtn));
+  }
+  if (clearImageCacheBtn) {
+    clearImageCacheBtn.addEventListener('click', () => performCacheClear('image', clearImageCacheBtn));
+  }
+  if (clearVideoCacheBtn) {
+    clearVideoCacheBtn.addEventListener('click', () => performCacheClear('video', clearVideoCacheBtn));
+  }
+  if (clearRenderCacheBtn) {
+    clearRenderCacheBtn.addEventListener('click', () => performCacheClear('render', clearRenderCacheBtn));
+  }
+  if (clearAllCacheBtn) {
+    clearAllCacheBtn.addEventListener('click', () => {
+      if (confirm('Вы уверены, что хотите полностью очистить ВСЕ типы кэша?')) {
+        performCacheClear('all', clearAllCacheBtn);
+      }
+    });
+  }
+
   // Drag & Drop файла
   const dropZone = getEl('dropZone');
   const fileInput = getEl('fileInput');
@@ -1018,6 +1059,52 @@ function updateSettingsStatusBadge(data) {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// Загрузка подробной статистики кэша
+async function loadCacheStats() {
+  try {
+    const res = await fetch(`${API_BASE}/cache/stats`);
+    if (res.ok) {
+      const stats = await res.json();
+      const audioStat = getEl('audioCacheStat');
+      const imageStat = getEl('imageCacheStat');
+      const videoStat = getEl('videoCacheStat');
+      const renderStat = getEl('renderCacheStat');
+
+      if (audioStat && stats.audio) audioStat.textContent = `${stats.audio.count} файлов (${stats.audio.mb} МБ)`;
+      if (imageStat && stats.image) imageStat.textContent = `${stats.image.count} файлов (${stats.image.mb} МБ)`;
+      if (videoStat && stats.video) videoStat.textContent = `${stats.video.count} файлов (${stats.video.mb} МБ)`;
+      if (renderStat && stats.render) renderStat.textContent = `${stats.render.count} файлов (${stats.render.mb} МБ)`;
+    }
+  } catch (err) {
+    logDiagnostic('warning', `Не удалось загрузить статистику кэша: ${err.message}`);
+  }
+}
+
+// Запрос очистки выбранной категории кэша
+async function performCacheClear(cacheType, btnElement) {
+  if (btnElement) btnElement.disabled = true;
+  logDiagnostic('info', `Очистка кэша '${cacheType}'...`);
+
+  try {
+    const res = await fetch(`${API_BASE}/cache/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cache_type: cacheType })
+    });
+
+    if (!res.ok) throw new Error(`Ошибка очистки: ${res.status}`);
+    const data = await res.json();
+
+    await loadCacheStats();
+    logDiagnostic('success', `Кэш '${cacheType}' очищен! Удалено файлов: ${data.cleared_files} (Освобождено: ${data.freed_mb} МБ)`);
+
+  } catch (err) {
+    logDiagnostic('error', `Ошибка очистки кэша '${cacheType}': ${err.message}`);
+  } finally {
+    if (btnElement) btnElement.disabled = false;
+  }
 }
 
 checkBackendHealth();

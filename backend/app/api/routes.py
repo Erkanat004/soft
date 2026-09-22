@@ -19,6 +19,7 @@ from app.services.voice_library import VoiceLibraryService
 from app.services.fcpxml import FCPXMLExportService, CACHE_DIR as FCPXML_CACHE_DIR
 from app.services.logger import AppLogger
 from app.services.settings import SettingsService
+from app.services.cache_manager import CacheManagerService
 
 router = APIRouter(prefix="/api", tags=["API Endpoints"])
 
@@ -411,3 +412,21 @@ def save_system_settings(request: SaveSettingsRequest):
 def get_system_file_logs(limit: Optional[int] = 100):
     """ Получение содержимого ротируемых текстовых файлов логов app.log и error.log """
     return AppLogger.read_file_logs(limit=limit or 100)
+
+class ClearCacheRequest(BaseModel):
+    cache_type: str = "all"  # audio, image, video, render, subtitles, all
+
+@router.get("/cache/stats")
+def get_cache_stats():
+    """ Получение подробной статистики объема и количества файлов каждого вида кэша """
+    return CacheManagerService.get_cache_stats()
+
+@router.post("/cache/clear")
+def clear_cache(request: ClearCacheRequest):
+    """ Раздельная или полная очистка кэша по категориям (audio/image/video/render/all) """
+    try:
+        return CacheManagerService.clear_cache(request.cache_type)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка очистки кэша: {str(e)}")
