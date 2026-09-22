@@ -17,6 +17,7 @@ from app.services.cost_tracker import CostTrackerService
 from app.services.batch_async import BatchAsyncService
 from app.services.voice_library import VoiceLibraryService
 from app.services.fcpxml import FCPXMLExportService, CACHE_DIR as FCPXML_CACHE_DIR
+from app.services.capcut import CapCutExportService, CACHE_DIR as CAPCUT_CACHE_DIR
 from app.services.logger import AppLogger
 from app.services.settings import SettingsService
 from app.services.cache_manager import CacheManagerService
@@ -375,6 +376,23 @@ def get_fcpxml_file(filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Файл FCPXML не найден")
     return FileResponse(file_path, media_type="application/xml", filename=filename)
+
+@router.post("/export/capcut")
+def export_capcut(timeline_data: Dict[str, Any]):
+    """ Экспорт проекта в формат проекта CapCut (draft_content.json + .zip пакет) """
+    try:
+        return CapCutExportService.generate_capcut_project(timeline_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка экспорта в CapCut: {str(e)}")
+
+@router.get("/capcut/{filename}")
+def get_capcut_file(filename: str):
+    """ Отдача файла экспорта CapCut (ZIP или JSON) для скачивания """
+    file_path = os.path.join(CAPCUT_CACHE_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Файл CapCut не найден")
+    media_type = "application/zip" if filename.endswith(".zip") else "application/json"
+    return FileResponse(file_path, media_type=media_type, filename=filename)
 
 @router.get("/system/logs")
 def get_system_diagnostics():

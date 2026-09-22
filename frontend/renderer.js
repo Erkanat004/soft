@@ -527,6 +527,47 @@ function setupEventListeners() {
     });
   }
 
+  const exportCapCutBtn = getEl('exportCapCutBtn');
+  if (exportCapCutBtn) {
+    exportCapCutBtn.addEventListener('click', async () => {
+      const timeline = await syncTimeline();
+      if (!timeline) return;
+
+      exportCapCutBtn.disabled = true;
+      updateProgress(40, 'Экспорт проекта в CapCut...');
+      logDiagnostic('info', 'Формирование проекта и черновика для CapCut (.zip / .json)...');
+
+      try {
+        const res = await fetch(`${API_BASE}/export/capcut`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(timeline)
+        });
+
+        if (!res.ok) throw new Error(`Ошибка экспорта в CapCut: ${res.status}`);
+        const data = await res.json();
+
+        const downloadUrl = `http://127.0.0.1:8000${data.capcut_url}`;
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = data.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        updateProgress(100, 'CapCut проект экспортирован!');
+        logDiagnostic('success', `Проект CapCut успешно сформирован! Файл: ${data.filename}`);
+        alert(`Проект CapCut успешно скомпилирован!\n\nСкачан файл: ${data.filename}\n\nКак использовать в CapCut:\n1. Распакуйте папку из ZIP в драфты CapCut:\n%LOCALAPPDATA%\\CapCut\\User Data\\Projects\\com.lveditor.draft\\\n2. Или импортируйте через Меню CapCut -> Файл -> Импорт FCPXML`);
+
+      } catch (err) {
+        logDiagnostic('error', `Ошибка экспорта в CapCut: ${err.message}`);
+        updateProgress(0, 'Ошибка');
+      } finally {
+        exportCapCutBtn.disabled = false;
+      }
+    });
+  }
+
   const exportFcpxmlBtn = getEl('exportFcpxmlBtn');
   if (exportFcpxmlBtn) {
     exportFcpxmlBtn.addEventListener('click', async () => {
